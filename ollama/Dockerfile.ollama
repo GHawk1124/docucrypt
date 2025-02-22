@@ -5,7 +5,7 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Set model name as build argument
-ARG MODEL=deepseek-coder:6.7b
+ARG MODEL=deepseek-r1:7b
 ENV MODEL=${MODEL}
 
 ENTRYPOINT ["/entrypoint.sh"]

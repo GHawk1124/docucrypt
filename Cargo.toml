@@ -1,3 +1,3 @@
 [workspace]
-members = ["./encipher-server", "file-crypt", "client-test", "frontend-client/src-tauri", "client-requests"]
+members = ["./encipher-server", "file-crypt", "client-test", "frontend-client/src-tauri", "client-requests", "encipher-server/docugraph"]
 resolver = "2"

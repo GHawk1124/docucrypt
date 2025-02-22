@@ -51,6 +51,8 @@ services:
       - OLLAMA_HOST=ollama:11434
       - RUST_LOG=info
       - DATABASE_URL=postgres://user1:pass@postgres:5432/users
+      - JWT_SECRET=secret
+      - TORCH_CUDA_VERSION=cu124
     networks:
       - ai-network
 

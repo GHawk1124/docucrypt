@@ -4,11 +4,11 @@ WORKDIR /usr/src/app
 COPY . .
 
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev && \
+    apt-get install -y pkg-config libssl-dev clang && \
     rm -rf /var/lib/apt/lists/*
 
 # Cache dependencies
-RUN cargo install --path .
+RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update && \
