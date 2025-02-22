@@ -12,10 +12,11 @@ import {
 } from "react-icons/fi";
 import { format } from "date-fns";
 import "../assets/styles/App.css";
+import { query } from "../services/apiService";
 
 const ChatInterface = () => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, token } = useAuth();
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -28,6 +29,7 @@ const ChatInterface = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const messagesEndRef = useRef(null);
+  const [error, setError] = useState("");
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,7 +39,7 @@ const ChatInterface = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
 
@@ -45,27 +47,29 @@ const ChatInterface = () => {
       id: messages.length + 1,
       type: "user",
       content: inputMessage,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputMessage("");
     setIsLoading(true);
+    setError("");
 
     try {
-      // Simulate AI response
-      setTimeout(() => {
-        const aiMessage = {
-          id: messages.length + 2,
-          type: "ai",
-          content: "This is a simulated AI response to your message.",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, aiMessage]);
-        setIsLoading(false);
-      }, 1500);
-    } catch (error) {
-      console.error("Error sending message:", error);
+      const response = await query(inputMessage, "deepseek-coder", token, 30);
+
+      const aiMessage = {
+        id: messages.length + 2,
+        type: "ai",
+        content: response.response || response,
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (err) {
+      console.error("Query error:", err);
+      setError(err.message || "Failed to get response");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -221,11 +225,18 @@ const ChatInterface = () => {
               </div>
             </div>
           )}
+          {error && (
+            <div className="flex justify-center">
+              <div className="bg-red-100 text-red-600 rounded-lg p-3">
+                {error}
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
         <form
-          onSubmit={handleSendMessage}
+          onSubmit={handleSubmit}
           style={{ backgroundColor: "var(--color-card)" }}
           className="p-4 border-t"
         >
@@ -242,6 +253,7 @@ const ChatInterface = () => {
               }}
               className="flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2"
               maxLength={500}
+              disabled={isLoading}
             />
             <button
               type="submit"

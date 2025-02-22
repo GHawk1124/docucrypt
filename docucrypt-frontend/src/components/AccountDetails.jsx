@@ -9,6 +9,13 @@ import {
   FiX,
 } from "react-icons/fi";
 import { useAuth } from "../contexts/AuthContext";
+import {
+  joinGroup,
+  updateUserClearance,
+  addUserToGroup,
+  createGroup,
+} from "../services/apiService";
+import TagsComponent from "./TagsComponent";
 
 const AccountDetails = () => {
   const navigate = useNavigate();
@@ -28,12 +35,10 @@ const AccountDetails = () => {
   // State for creating a new group
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupPassword, setNewGroupPassword] = useState("");
-  const [newGroupTags, setNewGroupTags] = useState([]);
-  const [availableTags, setAvailableTags] = useState([
-    "Tech",
-    "Health",
-    "Education",
-  ]); // Sample tags
+  const [selectedTags, setSelectedTags] = useState([]);
+
+  const [groupName, setGroupName] = useState("");
+  const [groupPassword, setGroupPassword] = useState("");
 
   useEffect(() => {
     const auth_token = localStorage.getItem("auth_token");
@@ -50,32 +55,59 @@ const AccountDetails = () => {
     navigate("/signin-signup");
   };
 
-  const handleJoinGroup = (e) => {
+  const handleJoinGroup = async (e) => {
     e.preventDefault();
-    console.log("Attempting to join group with code:", groupCode);
+    console.log("Attempting to join group:", groupName);
 
-    // Log the selected security clearances for all join requests
-    joinRequests.forEach((request) => {
-      console.log(
-        `User: ${request.user}, Security Level: ${request.securityLevel}`
+    try {
+      await joinGroup(groupName, groupPassword, token);
+
+      setRequestStatus("Request to join submitted!"); // Set success message
+      setGroupName("");
+      setGroupPassword("");
+
+      // Clear the message after a few seconds
+      setTimeout(() => {
+        setRequestStatus("");
+      }, 3000);
+    } catch (error) {
+      console.error("Error joining group:", error);
+      setRequestStatus(
+        "Failed to join group: " +
+          (error.response?.data?.message || error.message)
       );
-    });
 
-    setRequestStatus("Request to join submitted!"); // Set request status message
-    setGroupCode("");
-
-    // Optionally, you can clear the message after a few seconds
-    setTimeout(() => {
-      setRequestStatus("");
-    }, 3000);
+      // Clear error message after a few seconds
+      setTimeout(() => {
+        setRequestStatus("");
+      }, 3000);
+    }
   };
 
-  const handleJoinRequest = (requestId, action) => {
+  const handleJoinRequest = async (requestId, action) => {
     console.log(`${action} join request:`, requestId);
+
     if (action === "approve") {
-      setJoinRequests((prevRequests) =>
-        prevRequests.filter((request) => request.id !== requestId)
-      );
+      try {
+        const request = joinRequests.find((req) => req.id === requestId);
+
+        // Update user's security clearance
+        await updateUserClearance(request.user, request.securityLevel, token);
+
+        // Add user to the group using the group name
+        await addUserToGroup(request.user, request.group, token);
+
+        // Remove request from the list
+        setJoinRequests((prevRequests) =>
+          prevRequests.filter((request) => request.id !== requestId)
+        );
+
+        // Optionally show success message
+        console.log("Successfully approved user join request");
+      } catch (error) {
+        console.error("Error processing join request:", error);
+        // Optionally show error message to user
+      }
     } else if (action === "deny") {
       setJoinRequests((prevRequests) =>
         prevRequests.filter((request) => request.id !== requestId)
@@ -94,7 +126,7 @@ const AccountDetails = () => {
     console.log(`Selected security level for request ${requestId}:`, newLevel);
   };
 
-  const handleCreateGroup = (e) => {
+  const handleCreateGroup = async (e) => {
     e.preventDefault();
     console.log(
       "Creating group:",
@@ -102,13 +134,38 @@ const AccountDetails = () => {
       "with password:",
       newGroupPassword,
       "and tags:",
-      newGroupTags
+      selectedTags
     );
-    // Reset form fields
-    setNewGroupName("");
-    setNewGroupPassword("");
-    setNewGroupTags([]);
-    // Optionally, you can add logic to actually create the group
+
+    try {
+      const groupData = {
+        group_name: newGroupName,
+        password: newGroupPassword,
+        tags: selectedTags,
+      };
+
+      await createGroup(groupData, token);
+
+      // Reset form fields
+      setNewGroupName("");
+      setNewGroupPassword("");
+      setSelectedTags([]);
+
+      // Optionally show success message
+      setRequestStatus("Group created successfully!");
+      setTimeout(() => {
+        setRequestStatus("");
+      }, 3000);
+    } catch (error) {
+      console.error("Error creating group:", error);
+      setRequestStatus(
+        "Failed to create group: " +
+          (error.response?.data?.message || error.message)
+      );
+      setTimeout(() => {
+        setRequestStatus("");
+      }, 3000);
+    }
   };
 
   return (
@@ -230,33 +287,7 @@ const AccountDetails = () => {
                     placeholder="Enter password"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Tags
-                  </label>
-                  <select
-                    multiple
-                    value={newGroupTags}
-                    onChange={(e) => {
-                      const options = e.target.options;
-                      const selectedTags = [];
-                      for (let i = 0; i < options.length; i++) {
-                        if (options[i].selected) {
-                          selectedTags.push(options[i].value);
-                        }
-                      }
-                      setNewGroupTags(selectedTags);
-                    }}
-                    className="mt-1 block w-full p-2 border border-gray-300 rounded-md"
-                  >
-                    {availableTags.map((tag, index) => (
-                      <option key={index} value={tag}>
-                        {tag}
-                      </option>
-                    ))}
-                    <option value="custom">Add custom tag...</option>
-                  </select>
-                </div>
+                <TagsComponent tags={selectedTags} setTags={setSelectedTags} />
                 <button
                   type="submit"
                   className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
@@ -307,9 +338,22 @@ const AccountDetails = () => {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={groupCode}
-                  onChange={(e) => setGroupCode(e.target.value)}
-                  placeholder="Enter group code"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Enter group name"
+                  className="flex-1 px-4 py-2 rounded border"
+                  style={{
+                    backgroundColor: "var(--color-background)",
+                    borderColor: "var(--color-border)",
+                    color: "var(--color-foreground)",
+                  }}
+                  required
+                />
+                <input
+                  type="password"
+                  value={groupPassword}
+                  onChange={(e) => setGroupPassword(e.target.value)}
+                  placeholder="Enter password"
                   className="flex-1 px-4 py-2 rounded border"
                   style={{
                     backgroundColor: "var(--color-background)",
@@ -331,7 +375,15 @@ const AccountDetails = () => {
                 </button>
               </div>
               {requestStatus && (
-                <p className="text-green-500">{requestStatus}</p> // Show request status message
+                <p
+                  className={
+                    requestStatus.includes("Failed")
+                      ? "text-red-500"
+                      : "text-green-500"
+                  }
+                >
+                  {requestStatus}
+                </p>
               )}
             </form>
           </div>

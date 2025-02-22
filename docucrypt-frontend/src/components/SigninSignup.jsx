@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { FiMail, FiLock } from "react-icons/fi";
+import { signUp, userLogin } from "../services/apiService";
 
 const SignInSignUp = () => {
   const [isSignIn, setIsSignIn] = useState(true);
@@ -10,7 +11,7 @@ const SignInSignUp = () => {
     password: "",
     confirmPassword: "",
   });
-  const [passwordError, setPasswordError] = useState("");
+  const [error, setError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -22,26 +23,26 @@ const SignInSignUp = () => {
         email: formData.email,
         password: formData.password,
       });
-      // Simulate login and navigate to chat
-      login("dummy_token", formData.email);
-      navigate("/chat-interface");
+      try {
+        const result = await userLogin(formData.email, formData.password);
+        console.log("Log In Successful:", result);
+        login(result.token, formData.email);
+        navigate("/chat-interface");
+      } catch (error) {
+        setError("Log In Failed: " + error.message);
+      }
     } else {
       if (formData.password !== formData.confirmPassword) {
-        setPasswordError("Passwords do not match");
+        setError("Passwords do not match");
         return;
       }
-      console.log("Sign Up Attempt:", {
-        email: formData.email,
-        password: formData.password,
-      });
-      // After sign up, clear form and switch to sign in
-      setFormData({
-        email: "",
-        password: "",
-        confirmPassword: "",
-      });
-      setPasswordError("");
-      setIsSignIn(true);
+      try {
+        const result = await signUp(formData.email, formData.password);
+        console.log("Sign Up Successful:", result);
+        navigate("/chat-interface");
+      } catch (error) {
+        setError("Sign Up Failed: " + error.message);
+      }
     }
   };
 
@@ -52,7 +53,7 @@ const SignInSignUp = () => {
       [name]: value,
     }));
     if (name === "confirmPassword" || name === "password") {
-      setPasswordError("");
+      setError("");
     }
   };
 
@@ -125,9 +126,7 @@ const SignInSignUp = () => {
               />
             </div>
           )}
-          {passwordError && (
-            <div className="text-sm text-red-500">{passwordError}</div>
-          )}
+          {error && <div className="text-sm text-red-500">{error}</div>}
           <button
             type="submit"
             className="w-full py-2 px-4 rounded transition-colors cursor-pointer"
@@ -136,7 +135,7 @@ const SignInSignUp = () => {
               color: "var(--color-primary-foreground)",
             }}
           >
-            {isSignIn ? "Sign In" : "Sign Up"}
+            {isSignIn ? "Log In" : "Sign Up"}
           </button>
         </form>
         <div className="mt-4 text-center">
@@ -148,14 +147,14 @@ const SignInSignUp = () => {
                 password: "",
                 confirmPassword: "",
               });
-              setPasswordError("");
+              setError("");
             }}
             className="text-sm hover:underline cursor-pointer"
             style={{ color: "var(--color-accent)" }}
           >
             {isSignIn
               ? "Don't have an account? Sign Up"
-              : "Already have an account? Sign In"}
+              : "Already have an account? Log In"}
           </button>
         </div>
       </div>
