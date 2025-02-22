@@ -26,13 +26,20 @@ services:
       context: ./ollama
       dockerfile: Dockerfile.ollama
       args:
-        - MODEL=deepseek-coder
+        - MODEL=deepseek-r1:1.5b
     ports:
       - "11434:11434"
     volumes:
       - ollama-data:/root/.ollama
     networks:
       - ai-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   encipher-server:
     build:
