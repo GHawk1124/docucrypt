@@ -585,8 +585,9 @@ async fn promote_to_admin_handler(
     // Add the user to the admins array
     let result = sqlx::query(
         "UPDATE groups 
-         SET admins = array_append(admins, $1) 
-         WHERE id = $2",
+         SET admins = array_append(admins, $1),
+             topsecret_clearance = array_append(topsecret_clearance, $1)
+         WHERE group_name = $2",
     )
     .bind(&payload.username) // Using username
     .bind(payload.group_name.clone())
@@ -644,8 +645,8 @@ async fn create_group_handler(
 
     // Create group and set creator as admin
     let result: Result<sqlx::postgres::PgQueryResult, sqlx::Error> = sqlx::query(
-        "INSERT INTO groups (group_name, password_hash, aes_key, tags, admins) 
-         VALUES ($1, $2, $3, $4, ARRAY[$5])",
+        "INSERT INTO groups (group_name, password_hash, aes_key, tags, admins, topsecret_clearance) 
+         VALUES ($1, $2, $3, $4, ARRAY[$5], ARRAY[$5])",
     )
     .bind(payload.group_name.clone())
     .bind(password_hash)
@@ -687,6 +688,66 @@ async fn create_group_handler(
     }
 }
 
+#[derive(Serialize)]
+struct GroupInfo {
+    group_name: String,
+    clearance: String,
+    is_admin: bool,
+}
+
+#[derive(Serialize)]
+struct UserInfoResponse {
+    username: String,
+    groups: Vec<GroupInfo>,
+}
+
+#[axum::debug_handler]
+async fn get_user_info_handler(
+    Extension(claims): Extension<Claims>,
+    Extension(pool): Extension<PgPool>,
+) -> Result<Json<UserInfoResponse>, (StatusCode, String)> {
+    let groups = sqlx::query(
+        "SELECT 
+            g.group_name,
+            CASE 
+                WHEN $1 = ANY(g.topsecret_clearance) THEN 'TOPSECRET'
+                WHEN $1 = ANY(g.secret_clearance) THEN 'SECRET'
+                WHEN $1 = ANY(g.cui_clearance) THEN 'CUI'
+                WHEN $1 = ANY(g.unclassified_clearance) THEN 'UNCLASSIFIED'
+            END as clearance,
+            $1 = ANY(g.admins) as is_admin
+        FROM groups g
+        WHERE $1 = ANY(g.unclassified_clearance) 
+           OR $1 = ANY(g.cui_clearance)
+           OR $1 = ANY(g.secret_clearance)
+           OR $1 = ANY(g.topsecret_clearance)",
+    )
+    .bind(&claims.sub)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to fetch user info".to_string(),
+        )
+    })?;
+
+    let groups_info: Vec<GroupInfo> = groups
+        .into_iter()
+        .map(|row| GroupInfo {
+            group_name: row.get("group_name"),
+            clearance: row.get("clearance"),
+            is_admin: row.get("is_admin"),
+        })
+        .collect();
+
+    Ok(Json(UserInfoResponse {
+        username: claims.sub,
+        groups: groups_info,
+    }))
+}
+
 #[tokio::main]
 async fn main() {
     // Initialize Ollama client pointing to the container.
@@ -717,6 +778,7 @@ async fn main() {
         .route("/groups/users", post(add_user_to_group_handler))
         .route("/groups/admins", post(promote_to_admin_handler))
         .route("/groups", post(create_group_handler))
+        .route("/users/info", get(get_user_info_handler))
         .layer(middleware::from_fn(jwt_auth_middleware));
 
     // Build the main router.
