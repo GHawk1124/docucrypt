@@ -62,7 +62,7 @@ struct QueryResponse {
 }
 
 fn default_model() -> String {
-    "deepseek-coder".to_string()
+    "deepseek-r1:1.5b".to_string()
 }
 
 fn default_timeout() -> u64 {
@@ -622,7 +622,7 @@ async fn create_group_handler(
     Json(payload): Json<CreateGroupRequest>,
 ) -> impl IntoResponse {
     let argon2 = Argon2::default();
-    let salt = SaltString::from_b64("test").unwrap();
+    let salt = SaltString::from_b64("dGVzdHRlc3R0ZXN0dGVzdA").unwrap();
     // let salt = SaltString::generate(&mut OsRng);
     let password_hash = match argon2.hash_password(payload.password.as_bytes(), &salt) {
         Ok(hash) => hash.to_string(),
