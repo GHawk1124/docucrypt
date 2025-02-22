@@ -1,0 +1,76 @@
+:root {
+  --color-primary: #0d6efd;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #f0f1f3;
+  --color-secondary-foreground: #020817;
+
+  --color-accent: #6d7074;
+  --color-accent-foreground: #020817;
+
+  --color-background: #fafafb;
+  --color-foreground: #020817;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #020817;
+
+  --color-popover: #ffffff;
+  --color-popover-foreground: #020817;
+
+  --color-muted: #f0f1f3;
+  --color-muted-foreground: #6d7074;
+
+  --color-destructive: #ff4c4c;
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: #e0e0e0;
+  --color-input: #e0e0e0;
+  --color-ring: #0d6efd;
+
+  --color-chart-1: #ff6f61;
+  --color-chart-2: #4caf50;
+  --color-chart-3: #03a9f4;
+  --color-chart-4: #ffc107;
+  --color-chart-5: #8e44ad;
+
+  --border-radius-sm: 0.125rem;
+  --box-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+  --font-family-inter: "Inter", sans-serif;
+
+  --font-size-heading: 36px;
+  --font-size-body: 14px;
+
+  --font-weight-heading: 700;
+  --font-weight-body: 600;
+}
+
+.dark {
+  --color-primary: #0d6efd;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #1e1e2c;
+  --color-secondary-foreground: #fafafb;
+
+  --color-accent: #6d7074;
+  --color-accent-foreground: #fafafb;
+
+  --color-background: #020817;
+  --color-foreground: #fafafb;
+
+  --color-card: #121212;
+  --color-card-foreground: #fafafb;
+
+  --color-popover: #121212;
+  --color-popover-foreground: #fafafb;
+
+  --color-muted: #1e1e2c;
+  --color-muted-foreground: #6d7074;
+
+  --color-destructive: #ff4c4c;
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: #3c3c3c;
+  --color-input: #3c3c3c;
+  --color-ring: #0d6efd;
+}
