@@ -1,14 +1,12 @@
 CREATE TYPE clearance_level AS ENUM ('UNCLASSIFIED', 'CUI', 'SECRET', 'TOPSECRET');
 
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    group_ids SERIAL[] DEFAULT ARRAY[]::SERIAL[]
+    group_names VARCHAR(255)[] DEFAULT ARRAY[]::VARCHAR[]
 );
 
 CREATE TABLE IF NOT EXISTS groups (
-    id SERIAL PRIMARY KEY,
     group_name VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     aes_key VARCHAR(255) NOT NULL,
