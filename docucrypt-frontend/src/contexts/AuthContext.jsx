@@ -25,19 +25,26 @@ export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem("auth_token") !== null;
   });
+  const [userEmail, setUserEmail] = useState(() => {
+    return localStorage.getItem("user_email") || null;
+  });
 
-  const login = (token) => {
+  const login = (token, email) => {
     localStorage.setItem("auth_token", token);
+    localStorage.setItem("user_email", email);
     setIsAuthenticated(true);
+    setUserEmail(email);
   };
 
   const logout = () => {
     localStorage.removeItem("auth_token");
+    localStorage.removeItem("user_email");
     setIsAuthenticated(false);
+    setUserEmail(null);
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, userEmail, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -23,7 +23,7 @@ const SignInSignUp = () => {
         password: formData.password,
       });
       // Simulate login and navigate to chat
-      login("dummy_token");
+      login("dummy_token", formData.email);
       navigate("/chat-interface");
     } else {
       if (formData.password !== formData.confirmPassword) {

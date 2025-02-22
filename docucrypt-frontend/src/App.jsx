@@ -5,6 +5,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import ChatInterface from "./components/ChatInterface";
 import DocumentUpload from "./components/DocumentUpload";
 import SignInSignUp from "./components/SignInSignUp";
+import AccountDetails from "./components/AccountDetails";
 import "./assets/styles/App.css";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,14 @@ const App = () => {
               }
             />
             <Route path="/signin-signup" element={<SignInSignUp />} />
+            <Route
+              path="/account-details"
+              element={
+                <ProtectedRoute>
+                  <AccountDetails />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

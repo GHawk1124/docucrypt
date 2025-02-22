@@ -9,6 +9,7 @@ import {
   FiLogOut,
   FiMoon,
   FiSun,
+  FiUser,
 } from "react-icons/fi";
 import "../assets/styles/App.css";
 import { useNavigate } from "react-router-dom";
@@ -171,6 +172,10 @@ const DocumentUpload = () => {
     navigate("/chat-interface");
   };
 
+  const handleAccountClick = () => {
+    navigate("/account-details");
+  };
+
   const handleSendFiles = () => {
     // print out the files uploaded and their contents
     files.forEach((file) => {
@@ -212,6 +217,16 @@ const DocumentUpload = () => {
             </button>
           </div>
           <div className="flex items-center space-x-4">
+            <button
+              onClick={handleAccountClick}
+              className="p-2 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
+              style={{ backgroundColor: "var(--color-secondary)" }}
+            >
+              <FiUser
+                style={{ color: "var(--color-accent)" }}
+                className="w-5 h-5"
+              />
+            </button>
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2 rounded-lg hover:opacity-80 transition-colors cursor-pointer"

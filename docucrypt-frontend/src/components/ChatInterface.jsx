@@ -8,6 +8,7 @@ import {
   FiMoon,
   FiSun,
   FiTrash2,
+  FiUser,
 } from "react-icons/fi";
 import { format } from "date-fns";
 import "../assets/styles/App.css";
@@ -89,6 +90,10 @@ const ChatInterface = () => {
     navigate("/document-upload");
   };
 
+  const handleAccountClick = () => {
+    navigate("/account-details");
+  };
+
   return (
     <div className={`min-h-screen ${isDarkMode ? "dark" : ""}`}>
       <div
@@ -102,7 +107,7 @@ const ChatInterface = () => {
           <div className="flex items-center space-x-4">
             <button
               onClick={handleUploadClick}
-              className="p-2 rounded-lg hover:opacity-80 transition-colors"
+              className="p-2 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
               style={{ backgroundColor: "var(--color-secondary)" }}
             >
               <FiUpload
@@ -113,8 +118,18 @@ const ChatInterface = () => {
           </div>
           <div className="flex items-center space-x-4">
             <button
+              onClick={handleAccountClick}
+              className="p-2 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
+              style={{ backgroundColor: "var(--color-secondary)" }}
+            >
+              <FiUser
+                style={{ color: "var(--color-accent)" }}
+                className="w-5 h-5"
+              />
+            </button>
+            <button
               onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 rounded-lg hover:opacity-80 transition-colors"
+              className="p-2 rounded-lg hover:opacity-80 transition-colors cursor-pointer"
               style={{ backgroundColor: "var(--color-secondary)" }}
             >
               {isDarkMode ? (
