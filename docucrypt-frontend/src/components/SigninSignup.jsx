@@ -1,24 +1,48 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { FiMail, FiLock, FiUser } from "react-icons/fi";
+import { FiMail, FiLock } from "react-icons/fi";
 
 const SignInSignUp = () => {
   const [isSignIn, setIsSignIn] = useState(true);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    name: "",
+    confirmPassword: "",
   });
+  const [passwordError, setPasswordError] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Add your authentication logic here
-    // For now, we'll just simulate a successful login
-    login("dummy_token");
-    navigate("/chat-interface");
+
+    if (isSignIn) {
+      console.log("Sign In Attempt:", {
+        email: formData.email,
+        password: formData.password,
+      });
+      // Simulate login and navigate to chat
+      login("dummy_token");
+      navigate("/chat-interface");
+    } else {
+      if (formData.password !== formData.confirmPassword) {
+        setPasswordError("Passwords do not match");
+        return;
+      }
+      console.log("Sign Up Attempt:", {
+        email: formData.email,
+        password: formData.password,
+      });
+      // After sign up, clear form and switch to sign in
+      setFormData({
+        email: "",
+        password: "",
+        confirmPassword: "",
+      });
+      setPasswordError("");
+      setIsSignIn(true);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -27,6 +51,9 @@ const SignInSignUp = () => {
       ...prev,
       [name]: value,
     }));
+    if (name === "confirmPassword" || name === "password") {
+      setPasswordError("");
+    }
   };
 
   return (
@@ -45,25 +72,6 @@ const SignInSignUp = () => {
           {isSignIn ? "Welcome Back" : "Create Account"}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isSignIn && (
-            <div className="relative">
-              <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-accent" />
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                placeholder="Full Name"
-                className="w-full pl-10 pr-4 py-2 rounded border"
-                style={{
-                  backgroundColor: "var(--color-background)",
-                  borderColor: "var(--color-border)",
-                  color: "var(--color-foreground)",
-                }}
-                required
-              />
-            </div>
-          )}
           <div className="relative">
             <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-accent" />
             <input
@@ -71,7 +79,7 @@ const SignInSignUp = () => {
               name="email"
               value={formData.email}
               onChange={handleInputChange}
-              placeholder="Email Address"
+              placeholder="Username/Email Address"
               className="w-full pl-10 pr-4 py-2 rounded border"
               style={{
                 backgroundColor: "var(--color-background)",
@@ -98,9 +106,31 @@ const SignInSignUp = () => {
               required
             />
           </div>
+          {!isSignIn && (
+            <div className="relative">
+              <FiLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-accent" />
+              <input
+                type="password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+                placeholder="Confirm Password"
+                className="w-full pl-10 pr-4 py-2 rounded border"
+                style={{
+                  backgroundColor: "var(--color-background)",
+                  borderColor: "var(--color-border)",
+                  color: "var(--color-foreground)",
+                }}
+                required
+              />
+            </div>
+          )}
+          {passwordError && (
+            <div className="text-sm text-red-500">{passwordError}</div>
+          )}
           <button
             type="submit"
-            className="w-full py-2 px-4 rounded transition-colors"
+            className="w-full py-2 px-4 rounded transition-colors cursor-pointer"
             style={{
               backgroundColor: "var(--color-primary)",
               color: "var(--color-primary-foreground)",
@@ -111,8 +141,16 @@ const SignInSignUp = () => {
         </form>
         <div className="mt-4 text-center">
           <button
-            onClick={() => setIsSignIn(!isSignIn)}
-            className="text-sm hover:underline"
+            onClick={() => {
+              setIsSignIn(!isSignIn);
+              setFormData({
+                email: "",
+                password: "",
+                confirmPassword: "",
+              });
+              setPasswordError("");
+            }}
+            className="text-sm hover:underline cursor-pointer"
             style={{ color: "var(--color-accent)" }}
           >
             {isSignIn
