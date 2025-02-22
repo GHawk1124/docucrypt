@@ -41,7 +41,7 @@ struct AuthResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Claims {
-    sub: String, // could be username or user id
+    sub: String, // username
     exp: usize,
 }
 
@@ -255,7 +255,8 @@ async fn jwt_auth_middleware(
 // Add clearance update handler
 #[derive(Deserialize)]
 struct UpdateUserClearanceRequest {
-    user_id: i32,
+    username: String,
+    group_id: i32,
     new_clearance: String,
 }
 
@@ -274,26 +275,26 @@ async fn update_user_clearance_handler(
         return (StatusCode::BAD_REQUEST, "Invalid clearance level").into_response();
     }
 
-    // Check if the requesting user is an admin of any group the target user is in
+    // Check if the requesting user is an admin of this specific group
     let is_admin = sqlx::query(
         "SELECT EXISTS (
             SELECT 1 FROM groups 
-            WHERE $1 = ANY(admins) 
-            AND id = ANY((SELECT group_ids FROM users WHERE id = $2))
+            WHERE id = $1 
+            AND $2 = ANY(admins)
         )",
     )
-    .bind(claims.sub) // The requesting user's ID
-    .bind(payload.user_id)
+    .bind(payload.group_id)
+    .bind(&claims.sub)
     .fetch_one(&pool)
     .await;
 
     match is_admin {
         Ok(row) => {
-            let exists: bool = row.get("exists"); // Fixed line
+            let exists: bool = row.get::<bool, _>("exists");
             if !exists {
                 return (
                     StatusCode::FORBIDDEN,
-                    "Not authorized to update clearance level",
+                    "Not authorized to update clearance level for this group",
                 )
                     .into_response();
             }
@@ -304,15 +305,67 @@ async fn update_user_clearance_handler(
         }
     }
 
-    // Update the user's clearance
-    let result = sqlx::query("UPDATE users SET clearance = $1::clearance_level WHERE id = $2")
-        .bind(&payload.new_clearance)
-        .bind(payload.user_id)
-        .execute(&pool)
+    // Start a transaction
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            eprintln!("Failed to start transaction: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
+        }
+    };
+
+    // Remove from all clearance arrays first
+    let remove_query = "
+        UPDATE groups 
+        SET 
+            unclassified_clearance = array_remove(unclassified_clearance, $1),
+            cui_clearance = array_remove(cui_clearance, $1),
+            secret_clearance = array_remove(secret_clearance, $1),
+            topsecret_clearance = array_remove(topsecret_clearance, $1)
+        WHERE id = $2";
+
+    let result = sqlx::query(remove_query)
+        .bind(&payload.username) // Remove username from all arrays
+        .bind(payload.group_id)
+        .execute(&mut *tx)
+        .await;
+    if let Err(e) = result {
+        eprintln!("Failed to remove from previous clearance levels: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to update clearance",
+        )
+            .into_response();
+    }
+
+    // Add to new clearance array
+    let update_query = match payload.new_clearance.as_str() {
+        "UNCLASSIFIED" => "UPDATE groups SET unclassified_clearance = array_append(unclassified_clearance, $1) WHERE id = $2",
+        "CUI" => "UPDATE groups SET cui_clearance = array_append(cui_clearance, $1) WHERE id = $2",
+        "SECRET" => "UPDATE groups SET secret_clearance = array_append(secret_clearance, $1) WHERE id = $2",
+        "TOPSECRET" => "UPDATE groups SET topsecret_clearance = array_append(topsecret_clearance, $1) WHERE id = $2",
+        _ => return (StatusCode::BAD_REQUEST, "Invalid clearance level").into_response(),
+    };
+
+    let result = sqlx::query(update_query)
+        .bind(&payload.username) // Add username to new clearance array
+        .bind(payload.group_id)
+        .execute(&mut *tx)
         .await;
 
     match result {
-        Ok(_) => (StatusCode::OK, "Clearance updated successfully").into_response(),
+        Ok(_) => {
+            // Commit the transaction
+            if let Err(e) = tx.commit().await {
+                eprintln!("Failed to commit transaction: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to update clearance",
+                )
+                    .into_response();
+            }
+            (StatusCode::OK, "Clearance updated successfully").into_response()
+        }
         Err(e) => {
             eprintln!("Database update error: {}", e);
             (
@@ -324,10 +377,9 @@ async fn update_user_clearance_handler(
     }
 }
 
-// Add a handler for adding a user to a group
 #[derive(Deserialize)]
 struct AddUserToGroupRequest {
-    user_id: i32,
+    username: String,
     group_id: i32,
 }
 
@@ -345,13 +397,13 @@ async fn add_user_to_group_handler(
         )",
     )
     .bind(payload.group_id)
-    .bind(claims.sub)
+    .bind(&claims.sub) // Using username from claims
     .fetch_one(&pool)
     .await;
 
     match is_admin {
         Ok(row) => {
-            let exists: bool = row.get("exists");
+            let exists: bool = row.get::<bool, _>("exists");
             if !exists {
                 return (
                     StatusCode::FORBIDDEN,
@@ -366,22 +418,66 @@ async fn add_user_to_group_handler(
         }
     }
 
-    // Add the user to the group by updating their group_ids array
+    // Start a transaction
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            eprintln!("Failed to start transaction: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
+        }
+    };
+
+    // Add the user to the group's group_ids array
     let result = sqlx::query(
         "UPDATE users 
          SET group_ids = array_append(group_ids, $1) 
-         WHERE id = $2 
+         WHERE username = $2 
          AND NOT ($1 = ANY(group_ids))", // Prevent duplicate group_ids
     )
     .bind(payload.group_id)
-    .bind(payload.user_id)
-    .execute(&pool)
+    .bind(&payload.username)
+    .execute(&mut *tx)
+    .await;
+
+    if let Err(e) = result {
+        eprintln!("Database error updating user's group_ids: {}", e);
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to add user to group",
+        )
+            .into_response();
+    }
+
+    // Add the user to the unclassified clearance array by default
+    let result = sqlx::query(
+        "UPDATE groups 
+         SET unclassified_clearance = array_append(unclassified_clearance, $1) 
+         WHERE id = $2 
+         AND NOT ($1 = ANY(unclassified_clearance))", // Prevent duplicate entries
+    )
+    .bind(&payload.username)
+    .bind(payload.group_id)
+    .execute(&mut *tx)
     .await;
 
     match result {
-        Ok(_) => (StatusCode::OK, "User added to group successfully").into_response(),
+        Ok(_) => {
+            // Commit the transaction
+            if let Err(e) = tx.commit().await {
+                eprintln!("Failed to commit transaction: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to add user to group",
+                )
+                    .into_response();
+            }
+            (StatusCode::OK, "User added to group successfully").into_response()
+        }
         Err(e) => {
-            eprintln!("Database update error: {}", e);
+            eprintln!(
+                "Database error adding user to unclassified clearance: {}",
+                e
+            );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to add user to group",
@@ -393,7 +489,7 @@ async fn add_user_to_group_handler(
 
 #[derive(Deserialize)]
 struct UpdateAdminRequest {
-    user_id: i32,
+    username: String,
     group_id: i32,
 }
 
@@ -411,13 +507,13 @@ async fn promote_to_admin_handler(
         )",
     )
     .bind(payload.group_id)
-    .bind(claims.sub)
+    .bind(&claims.sub) // Using username from claims
     .fetch_one(&pool)
     .await;
 
     match is_admin {
         Ok(row) => {
-            let exists: bool = row.get("exists");
+            let exists: bool = row.get::<bool, _>("exists");
             if !exists {
                 return (
                     StatusCode::FORBIDDEN,
@@ -440,13 +536,13 @@ async fn promote_to_admin_handler(
         )",
     )
     .bind(payload.group_id)
-    .bind(payload.user_id)
+    .bind(&payload.username) // Using username from request
     .fetch_one(&pool)
     .await;
 
     match already_admin {
         Ok(row) => {
-            let exists: bool = row.get("exists");
+            let exists: bool = row.get::<bool, _>("exists");
             if exists {
                 return (StatusCode::BAD_REQUEST, "User is already an admin").into_response();
             }
@@ -457,13 +553,43 @@ async fn promote_to_admin_handler(
         }
     }
 
+    // Check if user is a member of the group
+    let is_member = sqlx::query(
+        "SELECT EXISTS (
+            SELECT 1 FROM users 
+            WHERE username = $1 
+            AND $2 = ANY(group_ids)
+        )",
+    )
+    .bind(&payload.username)
+    .bind(payload.group_id)
+    .fetch_one(&pool)
+    .await;
+
+    match is_member {
+        Ok(row) => {
+            let exists: bool = row.get::<bool, _>("exists");
+            if !exists {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "User must be a member of the group to become an admin",
+                )
+                    .into_response();
+            }
+        }
+        Err(e) => {
+            eprintln!("Database error checking group membership: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
+        }
+    }
+
     // Add the user to the admins array
     let result = sqlx::query(
         "UPDATE groups 
          SET admins = array_append(admins, $1) 
          WHERE id = $2",
     )
-    .bind(payload.user_id)
+    .bind(&payload.username) // Using username
     .bind(payload.group_id)
     .execute(&pool)
     .await;
@@ -486,7 +612,6 @@ async fn promote_to_admin_handler(
 struct CreateGroupRequest {
     group_name: String,
     password: String,
-    aes_key: String,
     tags: Vec<String>,
 }
 
