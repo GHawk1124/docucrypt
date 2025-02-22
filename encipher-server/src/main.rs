@@ -274,32 +274,52 @@ async fn update_user_clearance_handler(
         return (StatusCode::BAD_REQUEST, "Invalid clearance level").into_response();
     }
 
-    // Check if the requesting user is an admin of this specific group
-    let is_admin = sqlx::query(
-        "SELECT EXISTS (
-            SELECT 1 FROM groups 
-            WHERE group_name = $1 
-            AND $2 = ANY(admins)
-        )",
+    // Combined check for: requester is admin AND target is member of the SAME group
+    let checks = sqlx::query(
+        "WITH specific_group AS (
+            SELECT group_name, admins 
+            FROM groups 
+            WHERE group_name = $1
+        )
+        SELECT 
+            (SELECT $2 = ANY(admins) FROM specific_group) as is_requester_admin,
+            (
+                SELECT EXISTS (
+                    SELECT 1 FROM users 
+                    WHERE username = $3 
+                    AND $1 = ANY(group_names)
+                )
+            ) as is_target_member
+        FROM specific_group",
     )
-    .bind(payload.group_name.clone())
+    .bind(&payload.group_name)
     .bind(&claims.sub)
+    .bind(&payload.username)
     .fetch_one(&pool)
     .await;
 
-    match is_admin {
+    match checks {
         Ok(row) => {
-            let exists: bool = row.get::<bool, _>("exists");
-            if !exists {
+            let is_requester_admin: bool = row.get("is_requester_admin");
+            let is_target_member: bool = row.get("is_target_member");
+
+            if !is_requester_admin {
                 return (
                     StatusCode::FORBIDDEN,
                     "Not authorized to update clearance level for this group",
                 )
                     .into_response();
             }
+            if !is_target_member {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "Target user is not a member of this group",
+                )
+                    .into_response();
+            }
         }
         Err(e) => {
-            eprintln!("Database error checking admin status: {}", e);
+            eprintln!("Database error checking permissions: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
         }
     }
@@ -307,10 +327,7 @@ async fn update_user_clearance_handler(
     // Start a transaction
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
-        Err(e) => {
-            eprintln!("Failed to start transaction: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
-        }
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response(),
     };
 
     // Remove from all clearance arrays first
@@ -324,10 +341,11 @@ async fn update_user_clearance_handler(
         WHERE group_name = $2";
 
     let result = sqlx::query(remove_query)
-        .bind(&payload.username) // Remove username from all arrays
-        .bind(payload.group_name.clone())
+        .bind(&payload.username)
+        .bind(&payload.group_name)
         .execute(&mut *tx)
         .await;
+
     if let Err(e) = result {
         eprintln!("Failed to remove from previous clearance levels: {}", e);
         return (
@@ -345,18 +363,15 @@ async fn update_user_clearance_handler(
         "TOPSECRET" => "UPDATE groups SET topsecret_clearance = array_append(topsecret_clearance, $1) WHERE group_name = $2",
         _ => return (StatusCode::BAD_REQUEST, "Invalid clearance level").into_response(),
     };
-
     let result = sqlx::query(update_query)
-        .bind(&payload.username) // Add username to new clearance array
-        .bind(payload.group_name.clone())
+        .bind(&payload.username)
+        .bind(&payload.group_name)
         .execute(&mut *tx)
         .await;
 
     match result {
         Ok(_) => {
-            // Commit the transaction
-            if let Err(e) = tx.commit().await {
-                eprintln!("Failed to commit transaction: {}", e);
+            if let Err(_) = tx.commit().await {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to update clearance",
@@ -365,14 +380,11 @@ async fn update_user_clearance_handler(
             }
             (StatusCode::OK, "Clearance updated successfully").into_response()
         }
-        Err(e) => {
-            eprintln!("Database update error: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to update clearance",
-            )
-                .into_response()
-        }
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to update clearance",
+        )
+            .into_response(),
     }
 }
 
@@ -383,63 +395,79 @@ struct AddUserToGroupRequest {
 }
 
 #[axum::debug_handler]
-async fn add_user_to_group_handler(
+async fn admin_add_user_to_group_handler(
     Extension(claims): Extension<Claims>,
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<AddUserToGroupRequest>,
 ) -> impl IntoResponse {
-    // Check if the requesting user is an admin of the group
-    let is_admin = sqlx::query(
-        "SELECT EXISTS (
-            SELECT 1 FROM groups 
-            WHERE group_name = $1 AND $2 = ANY(admins)
-        )",
+    // Combined check for: requester is admin, target is not already in group
+    let checks = sqlx::query(
+        "WITH specific_group AS (
+            SELECT group_name, admins 
+            FROM groups 
+            WHERE group_name = $1
+        )
+        SELECT 
+            (SELECT $2 = ANY(admins) FROM specific_group) as is_requester_admin,
+            (
+                SELECT NOT EXISTS (
+                    SELECT 1 FROM users 
+                    WHERE username = $3 
+                    AND $1 = ANY(group_names)
+                )
+            ) as is_valid_target
+        FROM specific_group",
     )
-    .bind(payload.group_name.clone())
-    .bind(&claims.sub) // Using username from claims
+    .bind(&payload.group_name)
+    .bind(&claims.sub)
+    .bind(&payload.username)
     .fetch_one(&pool)
     .await;
 
-    match is_admin {
+    match checks {
         Ok(row) => {
-            let exists: bool = row.get::<bool, _>("exists");
-            if !exists {
+            let is_requester_admin: bool = row.get("is_requester_admin");
+            let is_valid_target: bool = row.get("is_valid_target");
+
+            if !is_requester_admin {
                 return (
                     StatusCode::FORBIDDEN,
                     "Not authorized to add users to this group",
                 )
                     .into_response();
             }
+            if !is_valid_target {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "User is already a member of this group",
+                )
+                    .into_response();
+            }
         }
         Err(e) => {
-            eprintln!("Database error checking admin status: {}", e);
+            eprintln!("Database error checking permissions: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
         }
     }
 
-    // Start a transaction
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
-        Err(e) => {
-            eprintln!("Failed to start transaction: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
-        }
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response(),
     };
 
-    // Add the user to the group's group_names array
+    // Add user to group_names
     let result = sqlx::query(
         "UPDATE users 
          SET group_names = array_append(group_names, $1) 
-         WHERE username = $2 
+         WHERE username = $2
          AND NOT ($1 = ANY(group_names))", // Prevent duplicate group_names
     )
-    .bind(payload.group_name.clone())
+    .bind(&payload.group_name)
     .bind(&payload.username)
     .execute(&mut *tx)
     .await;
 
-    if let Err(e) = result {
-        eprintln!("Database error updating user's group_names: {}", e);
+    if let Err(_) = result {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Failed to add user to group",
@@ -447,23 +475,21 @@ async fn add_user_to_group_handler(
             .into_response();
     }
 
-    // Add the user to the unclassified clearance array by default
+    // Add user to unclassified_clearance
     let result = sqlx::query(
         "UPDATE groups 
          SET unclassified_clearance = array_append(unclassified_clearance, $1) 
-         WHERE group_name = $2 
+         WHERE group_name = $2
          AND NOT ($1 = ANY(unclassified_clearance))", // Prevent duplicate entries
     )
     .bind(&payload.username)
-    .bind(payload.group_name.clone())
+    .bind(&payload.group_name)
     .execute(&mut *tx)
     .await;
 
     match result {
         Ok(_) => {
-            // Commit the transaction
-            if let Err(e) = tx.commit().await {
-                eprintln!("Failed to commit transaction: {}", e);
+            if let Err(_) = tx.commit().await {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Failed to add user to group",
@@ -472,17 +498,96 @@ async fn add_user_to_group_handler(
             }
             (StatusCode::OK, "User added to group successfully").into_response()
         }
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to add user to group",
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct JoinGroupRequest {
+    group_name: String,
+    password: String,
+}
+
+#[axum::debug_handler]
+async fn user_join_group_handler(
+    Extension(claims): Extension<Claims>,
+    Extension(pool): Extension<PgPool>,
+    Json(payload): Json<JoinGroupRequest>,
+) -> impl IntoResponse {
+    let group = match sqlx::query("SELECT password_hash FROM groups WHERE group_name = $1")
+        .bind(&payload.group_name)
+        .fetch_one(&pool)
+        .await
+    {
+        Ok(row) => row,
+        Err(_) => return (StatusCode::NOT_FOUND, "Group not found").into_response(),
+    };
+
+    let password_hash_db: String = group.get("password_hash");
+    let argon2 = Argon2::default();
+    let salt = SaltString::from_b64("dGVzdHRlc3R0ZXN0dGVzdA").unwrap();
+    let password_hash = match argon2.hash_password(payload.password.as_bytes(), &salt) {
+        Ok(hash) => hash.to_string(),
         Err(e) => {
-            eprintln!(
-                "Database error adding user to unclassified clearance: {}",
-                e
-            );
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to add user to group",
-            )
-                .into_response()
+            eprintln!("Password hashing failed: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
         }
+    };
+
+    if password_hash_db != password_hash {
+        return (StatusCode::UNAUTHORIZED, "Invalid password").into_response();
+    }
+
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response(),
+    };
+
+    // Add user to group_names
+    let result = sqlx::query(
+        "UPDATE users 
+         SET group_names = array_append(group_names, $1) 
+         WHERE username = $2 
+         AND NOT ($1 = ANY(group_names))
+         AND NOT EXISTS (
+         SELECT 1 FROM groups 
+         WHERE group_name = $1 
+         AND $2 = ANY(admins)
+     )",
+    )
+    .bind(&payload.group_name)
+    .bind(&claims.sub)
+    .execute(&mut *tx)
+    .await;
+
+    if let Err(_) = result {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to join group").into_response();
+    }
+
+    // Add user to unclassified_clearance
+    let result = sqlx::query(
+        "UPDATE groups 
+         SET unclassified_clearance = array_append(unclassified_clearance, $1) 
+         WHERE group_name = $2 
+         AND NOT ($1 = ANY(unclassified_clearance))",
+    )
+    .bind(&claims.sub)
+    .bind(&payload.group_name)
+    .execute(&mut *tx)
+    .await;
+
+    match result {
+        Ok(_) => {
+            if let Err(_) = tx.commit().await {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to join group").into_response();
+            }
+            (StatusCode::OK, "Successfully joined group").into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to join group").into_response(),
     }
 }
 
@@ -498,99 +603,73 @@ async fn promote_to_admin_handler(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<UpdateAdminRequest>,
 ) -> impl IntoResponse {
-    // First check if the requesting user is already an admin of the group
-    let is_admin = sqlx::query(
-        "SELECT EXISTS (
-            SELECT 1 FROM groups 
-            WHERE group_name = $1 AND $2 = ANY(admins)
-        )",
+    // Combined check for: requester is admin, target is member but not admin
+    let checks = sqlx::query(
+        "WITH specific_group AS (
+            SELECT group_name, admins 
+            FROM groups 
+            WHERE group_name = $1
+        )
+        SELECT 
+            (SELECT $2 = ANY(admins) FROM specific_group) as is_requester_admin,
+            (
+                SELECT EXISTS (
+                    SELECT 1 FROM users 
+                    WHERE username = $3 
+                    AND $1 = ANY(group_names)
+                    AND NOT EXISTS (
+                        SELECT 1 FROM groups 
+                        WHERE group_name = $1 
+                        AND $3 = ANY(admins)
+                    )
+                )
+            ) as is_valid_target
+        FROM specific_group",
     )
-    .bind(payload.group_name.clone())
-    .bind(&claims.sub) // Using username from claims
+    .bind(&payload.group_name)
+    .bind(&claims.sub)
+    .bind(&payload.username)
     .fetch_one(&pool)
     .await;
 
-    match is_admin {
+    match checks {
         Ok(row) => {
-            let exists: bool = row.get::<bool, _>("exists");
-            if !exists {
+            let is_requester_admin: bool = row.get("is_requester_admin");
+            let is_valid_target: bool = row.get("is_valid_target");
+
+            if !is_requester_admin {
                 return (
                     StatusCode::FORBIDDEN,
                     "Not authorized to modify admin status",
                 )
                     .into_response();
             }
-        }
-        Err(e) => {
-            eprintln!("Database error checking admin status: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
-        }
-    }
-
-    // Check if user is already an admin
-    let already_admin = sqlx::query(
-        "SELECT EXISTS (
-            SELECT 1 FROM groups 
-            WHERE group_name = $1 AND $2 = ANY(admins)
-        )",
-    )
-    .bind(payload.group_name.clone())
-    .bind(&payload.username) // Using username from request
-    .fetch_one(&pool)
-    .await;
-
-    match already_admin {
-        Ok(row) => {
-            let exists: bool = row.get::<bool, _>("exists");
-            if exists {
-                return (StatusCode::BAD_REQUEST, "User is already an admin").into_response();
-            }
-        }
-        Err(e) => {
-            eprintln!("Database error checking existing admin status: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
-        }
-    }
-
-    // Check if user is a member of the group
-    let is_member = sqlx::query(
-        "SELECT EXISTS (
-            SELECT 1 FROM users 
-            WHERE username = $1 
-            AND $2 = ANY(group_names)
-        )",
-    )
-    .bind(&payload.username)
-    .bind(payload.group_name.clone())
-    .fetch_one(&pool)
-    .await;
-
-    match is_member {
-        Ok(row) => {
-            let exists: bool = row.get::<bool, _>("exists");
-            if !exists {
+            if !is_valid_target {
                 return (
                     StatusCode::BAD_REQUEST,
-                    "User must be a member of the group to become an admin",
+                    "Target user is either not a member or already an admin",
                 )
                     .into_response();
             }
         }
         Err(e) => {
-            eprintln!("Database error checking group membership: {}", e);
+            eprintln!("Database error checking permissions: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
         }
     }
 
-    // Add the user to the admins array
+    // Promote to admin and update clearances
     let result = sqlx::query(
         "UPDATE groups 
          SET admins = array_append(admins, $1),
-             topsecret_clearance = array_append(topsecret_clearance, $1)
+             topsecret_clearance = array_append(topsecret_clearance, $1),
+             unclassified_clearance = array_remove(unclassified_clearance, $1),
+             cui_clearance = array_remove(cui_clearance, $1),
+             secret_clearance = array_remove(secret_clearance, $1)
          WHERE group_name = $2",
     )
-    .bind(&payload.username) // Using username
-    .bind(payload.group_name.clone())
+    .bind(&payload.username)
+    .bind(&payload.group_name)
     .execute(&pool)
     .await;
 
@@ -775,8 +854,9 @@ async fn main() {
     let protected_routes = Router::new()
         .route("/query", post(query_handler))
         .route("/users/clearance", put(update_user_clearance_handler))
-        .route("/groups/users", post(add_user_to_group_handler))
-        .route("/groups/admins", post(promote_to_admin_handler))
+        .route("/groups/users/add", post(admin_add_user_to_group_handler))
+        .route("/groups/users/join", post(user_join_group_handler))
+        .route("/groups/admins/promote", post(promote_to_admin_handler))
         .route("/groups", post(create_group_handler))
         .route("/users/info", get(get_user_info_handler))
         .layer(middleware::from_fn(jwt_auth_middleware));
