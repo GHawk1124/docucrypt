@@ -77,7 +77,6 @@ const JWT_SECRET: &[u8] = b"your-very-secret-key";
 
 #[derive(sqlx::FromRow)]
 struct User {
-    id: i32,
     username: String,
     password_hash: String,
 }
@@ -256,7 +255,7 @@ async fn jwt_auth_middleware(
 #[derive(Deserialize)]
 struct UpdateUserClearanceRequest {
     username: String,
-    group_id: i32,
+    group_name: String,
     new_clearance: String,
 }
 
@@ -283,7 +282,7 @@ async fn update_user_clearance_handler(
             AND $2 = ANY(admins)
         )",
     )
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .bind(&claims.sub)
     .fetch_one(&pool)
     .await;
@@ -326,7 +325,7 @@ async fn update_user_clearance_handler(
 
     let result = sqlx::query(remove_query)
         .bind(&payload.username) // Remove username from all arrays
-        .bind(payload.group_id)
+        .bind(payload.group_name.clone())
         .execute(&mut *tx)
         .await;
     if let Err(e) = result {
@@ -349,7 +348,7 @@ async fn update_user_clearance_handler(
 
     let result = sqlx::query(update_query)
         .bind(&payload.username) // Add username to new clearance array
-        .bind(payload.group_id)
+        .bind(payload.group_name.clone())
         .execute(&mut *tx)
         .await;
 
@@ -380,7 +379,7 @@ async fn update_user_clearance_handler(
 #[derive(Deserialize)]
 struct AddUserToGroupRequest {
     username: String,
-    group_id: i32,
+    group_name: String,
 }
 
 #[axum::debug_handler]
@@ -396,7 +395,7 @@ async fn add_user_to_group_handler(
             WHERE id = $1 AND $2 = ANY(admins)
         )",
     )
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .bind(&claims.sub) // Using username from claims
     .fetch_one(&pool)
     .await;
@@ -427,20 +426,20 @@ async fn add_user_to_group_handler(
         }
     };
 
-    // Add the user to the group's group_ids array
+    // Add the user to the group's group_names array
     let result = sqlx::query(
         "UPDATE users 
-         SET group_ids = array_append(group_ids, $1) 
+         SET group_names = array_append(group_names, $1) 
          WHERE username = $2 
-         AND NOT ($1 = ANY(group_ids))", // Prevent duplicate group_ids
+         AND NOT ($1 = ANY(group_names))", // Prevent duplicate group_names
     )
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .bind(&payload.username)
     .execute(&mut *tx)
     .await;
 
     if let Err(e) = result {
-        eprintln!("Database error updating user's group_ids: {}", e);
+        eprintln!("Database error updating user's group_names: {}", e);
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Failed to add user to group",
@@ -452,11 +451,11 @@ async fn add_user_to_group_handler(
     let result = sqlx::query(
         "UPDATE groups 
          SET unclassified_clearance = array_append(unclassified_clearance, $1) 
-         WHERE id = $2 
+         WHERE group_name = $2 
          AND NOT ($1 = ANY(unclassified_clearance))", // Prevent duplicate entries
     )
     .bind(&payload.username)
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .execute(&mut *tx)
     .await;
 
@@ -490,7 +489,7 @@ async fn add_user_to_group_handler(
 #[derive(Deserialize)]
 struct UpdateAdminRequest {
     username: String,
-    group_id: i32,
+    group_name: String,
 }
 
 #[axum::debug_handler]
@@ -506,7 +505,7 @@ async fn promote_to_admin_handler(
             WHERE id = $1 AND $2 = ANY(admins)
         )",
     )
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .bind(&claims.sub) // Using username from claims
     .fetch_one(&pool)
     .await;
@@ -535,7 +534,7 @@ async fn promote_to_admin_handler(
             WHERE id = $1 AND $2 = ANY(admins)
         )",
     )
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .bind(&payload.username) // Using username from request
     .fetch_one(&pool)
     .await;
@@ -558,11 +557,11 @@ async fn promote_to_admin_handler(
         "SELECT EXISTS (
             SELECT 1 FROM users 
             WHERE username = $1 
-            AND $2 = ANY(group_ids)
+            AND $2 = ANY(group_names)
         )",
     )
     .bind(&payload.username)
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .fetch_one(&pool)
     .await;
 
@@ -590,7 +589,7 @@ async fn promote_to_admin_handler(
          WHERE id = $2",
     )
     .bind(&payload.username) // Using username
-    .bind(payload.group_id)
+    .bind(payload.group_name.clone())
     .execute(&pool)
     .await;
 
@@ -632,6 +631,14 @@ async fn create_group_handler(
         }
     };
 
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            eprintln!("Failed to start transaction: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
+        }
+    };
+
     // Randomly generate AES key (AES-256 key is 64 bytes) as vec of u8s
     let aes_key = rand::rng().random_range(0..u64::MAX).to_le_bytes();
 
@@ -640,18 +647,41 @@ async fn create_group_handler(
         "INSERT INTO groups (group_name, password_hash, aes_key, tags, admins) 
          VALUES ($1, $2, $3, $4, ARRAY[$5])",
     )
-    .bind(payload.group_name)
+    .bind(payload.group_name.clone())
     .bind(password_hash)
     .bind(aes_key)
     .bind(payload.tags)
-    .bind(claims.sub) // Add creator as first admin
-    .execute(&pool)
+    .bind(claims.sub.clone()) // Add creator as first admin
+    .execute(&mut *tx)
+    .await;
+
+    if let Err(e) = result {
+        eprintln!("Database insertion error: {}", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create group").into_response();
+    }
+
+    // Add group to creator's group_names
+    let result = sqlx::query(
+        "UPDATE users 
+         SET group_names = array_append(group_names, $1) 
+         WHERE username = $2",
+    )
+    .bind(payload.group_name.clone())
+    .bind(claims.sub.clone())
+    .execute(&mut *tx)
     .await;
 
     match result {
-        Ok(_) => (StatusCode::CREATED, "Group created successfully").into_response(),
+        Ok(_) => {
+            if let Err(e) = tx.commit().await {
+                eprintln!("Failed to commit transaction: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create group")
+                    .into_response();
+            }
+            (StatusCode::CREATED, "Group created successfully").into_response()
+        }
         Err(e) => {
-            eprintln!("Database insertion error: {}", e);
+            eprintln!("Database update error: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create group").into_response()
         }
     }
