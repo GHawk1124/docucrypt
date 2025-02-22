@@ -1,0 +1,35 @@
+# Target
+/target/
+
+# Rust and Cargo files
+Cargo.lock
+
+# Build Artifacts
+/webpack-stats.json
+/yarn-error.log
+/pnpm-debug.log
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Tauri
+/src-tauri/target/
+
+# Platform-specific files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor files
+.vscode/
+*.swp
+*.swo
+*.swn
+
+# Logs and temp files
+*.log
+/tmp/
+*.tmp
+
