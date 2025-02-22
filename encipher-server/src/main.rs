@@ -82,10 +82,6 @@ struct User {
     password_hash: String,
 }
 
-// -----------------------------------------------------------------------------
-// Handlers
-// -----------------------------------------------------------------------------
-
 // Registration handler
 #[axum::debug_handler]
 async fn register_handler(
