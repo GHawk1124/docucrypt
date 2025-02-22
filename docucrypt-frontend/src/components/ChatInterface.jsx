@@ -30,6 +30,7 @@ const ChatInterface = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const messagesEndRef = useRef(null);
   const [error, setError] = useState("");
+  const [thinkingMessages, setThinkingMessages] = useState({});
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,16 +57,43 @@ const ChatInterface = () => {
     setError("");
 
     try {
-      const response = await query(inputMessage, "deepseek-coder", token, 30);
+      // Comment out the actual API call
+      // const response = await query(inputMessage, "deepseek-coder", token, 30);
 
-      const aiMessage = {
-        id: messages.length + 2,
-        type: "ai",
-        content: response.response || response,
-        timestamp: new Date().toISOString(),
+      // Use sample response instead
+      const response = {
+        response:
+          "<think>This is the AI's thinking process</think>\nHeres a sample response from teh usernHeres a sample response from teh usernHeres a sample response from teh usernHeres a sample response from teh user",
       };
 
-      setMessages((prev) => [...prev, aiMessage]);
+      const aiResponse = response.response || response;
+
+      // Extract thinking and actual response
+      const thinkMatch = aiResponse.match(/<think>(.*?)<\/think>\s*(.*)/s);
+      const messageId = messages.length + 2;
+
+      if (thinkMatch) {
+        const [_, thinking, actualResponse] = thinkMatch;
+
+        // Show both thinking and response
+        const aiMessage = {
+          id: messageId,
+          type: "ai",
+          thinking: thinking.trim(),
+          content: actualResponse.trim(),
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+      } else {
+        // If no thinking tags, show response directly
+        const aiMessage = {
+          id: messageId,
+          type: "ai",
+          content: aiResponse,
+          timestamp: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+      }
     } catch (err) {
       console.error("Query error:", err);
       setError(err.message || "Failed to get response");
@@ -192,9 +220,17 @@ const ChatInterface = () => {
                 }}
                 className="max-w-[80%] md:max-w-[60%] rounded-lg p-4"
               >
-                <p className="text-body">{message.content}</p>
+                {message.thinking && (
+                  <div className="text-xs opacity-70 mb-2 pb-2 border-b border-current">
+                    <span className="font-medium">Thinking:</span>
+                    <p className="whitespace-pre-wrap">{message.thinking}</p>
+                  </div>
+                )}
+                <p className="text-body whitespace-pre-wrap">
+                  {message.content}
+                </p>
                 <p className="text-xs mt-2 opacity-70">
-                  {format(message.timestamp, "HH:mm")}
+                  {format(new Date(message.timestamp), "HH:mm")}
                 </p>
               </div>
             </div>

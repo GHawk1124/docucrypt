@@ -169,3 +169,25 @@ export const joinGroup = async (groupName, password, token) => {
     throw error;
   }
 };
+
+// Upload Document
+export const uploadDocument = async (fileName, fileContent, token) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/documents`,
+      {
+        file_name: fileName,
+        content: fileContent,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};

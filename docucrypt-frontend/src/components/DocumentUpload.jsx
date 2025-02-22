@@ -14,6 +14,7 @@ import {
 import "../assets/styles/App.css";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { uploadDocument } from "../services/apiService";
 
 const DocumentUpload = () => {
   const [files, setFiles] = useState([]);
@@ -24,7 +25,7 @@ const DocumentUpload = () => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, token } = useAuth();
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -176,18 +177,30 @@ const DocumentUpload = () => {
     navigate("/account-details");
   };
 
-  const handleSendFiles = () => {
-    // print out the files uploaded and their contents
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        console.log("File:", file.name);
-        console.log("Contents:", e.target.result);
-      };
-      reader.readAsText(file);
-    });
-    resetUpload();
-    // navigate("/chat-interface");
+  const handleSendFiles = async () => {
+    try {
+      for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            await uploadDocument(file.name, e.target.result, token);
+            console.log("Successfully uploaded:", file.name);
+          } catch (error) {
+            console.error("Error uploading file:", file.name, error);
+            setErrors((prev) => ({
+              ...prev,
+              [file.name]:
+                "Failed to upload: " +
+                (error.response?.data?.message || error.message),
+            }));
+          }
+        };
+        reader.readAsText(file);
+      }
+      resetUpload();
+    } catch (error) {
+      console.error("Error in handleSendFiles:", error);
+    }
   };
 
   const handleSectionClick = () => {
