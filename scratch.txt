@@ -1,0 +1,5 @@
+{ response: "<think>thinking process</think>
+actual response"}
+
+- deploy to domain name
+- create download link
