@@ -253,7 +253,7 @@ const DocumentUpload = () => {
         const reader = new FileReader();
         reader.onload = async (e) => {
           try {
-            // await uploadDocument(file.name, e.target.result, token);
+            await uploadDocument(file.name, e.target.result, token);
             console.log("Successfully uploaded:", file.name);
           } catch (error) {
             console.error("Error uploading file:", file.name, error);
