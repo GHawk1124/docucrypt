@@ -4,11 +4,12 @@
   "version": "0.1.0",
   "identifier": "com.docucrypt-frontend.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "trunk serve",
+    "beforeBuildCommand": "trunk build",
+    "devUrl": "http://localhost:8080",
     "frontendDist": "../dist"
   },
+
   "app": {
     "windows": [
       {
