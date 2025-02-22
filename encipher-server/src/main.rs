@@ -119,7 +119,7 @@ async fn login_handler(
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
     let user = match sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash FROM users WHERE username = $1",
+        "SELECT username, password_hash FROM users WHERE username = $1",
     )
     .bind(&payload.username)
     .fetch_one(&pool)
@@ -278,7 +278,7 @@ async fn update_user_clearance_handler(
     let is_admin = sqlx::query(
         "SELECT EXISTS (
             SELECT 1 FROM groups 
-            WHERE id = $1 
+            WHERE group_name = $1 
             AND $2 = ANY(admins)
         )",
     )
@@ -321,7 +321,7 @@ async fn update_user_clearance_handler(
             cui_clearance = array_remove(cui_clearance, $1),
             secret_clearance = array_remove(secret_clearance, $1),
             topsecret_clearance = array_remove(topsecret_clearance, $1)
-        WHERE id = $2";
+        WHERE group_name = $2";
 
     let result = sqlx::query(remove_query)
         .bind(&payload.username) // Remove username from all arrays
@@ -339,10 +339,10 @@ async fn update_user_clearance_handler(
 
     // Add to new clearance array
     let update_query = match payload.new_clearance.as_str() {
-        "UNCLASSIFIED" => "UPDATE groups SET unclassified_clearance = array_append(unclassified_clearance, $1) WHERE id = $2",
-        "CUI" => "UPDATE groups SET cui_clearance = array_append(cui_clearance, $1) WHERE id = $2",
-        "SECRET" => "UPDATE groups SET secret_clearance = array_append(secret_clearance, $1) WHERE id = $2",
-        "TOPSECRET" => "UPDATE groups SET topsecret_clearance = array_append(topsecret_clearance, $1) WHERE id = $2",
+        "UNCLASSIFIED" => "UPDATE groups SET unclassified_clearance = array_append(unclassified_clearance, $1) WHERE group_name = $2",
+        "CUI" => "UPDATE groups SET cui_clearance = array_append(cui_clearance, $1) WHERE group_name = $2",
+        "SECRET" => "UPDATE groups SET secret_clearance = array_append(secret_clearance, $1) WHERE group_name = $2",
+        "TOPSECRET" => "UPDATE groups SET topsecret_clearance = array_append(topsecret_clearance, $1) WHERE group_name = $2",
         _ => return (StatusCode::BAD_REQUEST, "Invalid clearance level").into_response(),
     };
 
@@ -392,7 +392,7 @@ async fn add_user_to_group_handler(
     let is_admin = sqlx::query(
         "SELECT EXISTS (
             SELECT 1 FROM groups 
-            WHERE id = $1 AND $2 = ANY(admins)
+            WHERE group_name = $1 AND $2 = ANY(admins)
         )",
     )
     .bind(payload.group_name.clone())
@@ -502,7 +502,7 @@ async fn promote_to_admin_handler(
     let is_admin = sqlx::query(
         "SELECT EXISTS (
             SELECT 1 FROM groups 
-            WHERE id = $1 AND $2 = ANY(admins)
+            WHERE group_name = $1 AND $2 = ANY(admins)
         )",
     )
     .bind(payload.group_name.clone())
@@ -531,7 +531,7 @@ async fn promote_to_admin_handler(
     let already_admin = sqlx::query(
         "SELECT EXISTS (
             SELECT 1 FROM groups 
-            WHERE id = $1 AND $2 = ANY(admins)
+            WHERE group_name = $1 AND $2 = ANY(admins)
         )",
     )
     .bind(payload.group_name.clone())
