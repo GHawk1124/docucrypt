@@ -169,39 +169,3 @@ export const joinGroup = async (groupName, password, token) => {
     throw error;
   }
 };
-
-// Get Group Details
-export const getGroupDetails = async (groupId, token) => {
-  // Mock data
-  const mockMembers = {
-    1: [{ id: 1, username: "John Doe", clearance_level: "BASIC" }],
-    2: [{ id: 2, username: "Jane Doe", clearance_level: "SECOND" }],
-  };
-  return {
-    id: groupId,
-    members: mockMembers[groupId] || [],
-  };
-};
-
-// Delete Group
-export const deleteGroup = async (groupId, token) => {
-  try {
-    const response = await axios.delete(`${API_URL}/groups/${groupId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-// For testing - replace with actual API call later
-export const getAdminGroups = async (token) => {
-  // Mock data
-  return [
-    { id: 1, name: "Hacklytics" },
-    { id: 2, name: "MLH" },
-  ];
-};
