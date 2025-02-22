@@ -1,0 +1,58 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[tasks.format]
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--", "--emit=files"]
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
+
+[tasks.docker]
+workspace = false
+command = "docker-compose"
+args = ["up", "--build"]
+
+[tasks.docker_bg]
+workspace = false
+command = "docker-compose"
+args = ["up", "--build", "-d"]
+
+[tasks.docker_down]
+workspace = false
+command = "docker-compose"
+args = ["down"]
+
+[tasks.test]
+command = "cargo"
+args = ["test"]
+
+[tasks.tauri_install]
+workspace = false
+script = [
+    "cd frontend-client",
+    "npm install",
+    "cd .."
+]
+
+[tasks.tailwind]
+workspace = false
+script = [
+    "cd frontend-client/src", 
+    "npx @tailwindcss/cli -i ./input.css -o ./App.css",
+    "cd ../.."
+]
+
+[tasks.tauri_dev]
+workspace = false
+script = [
+    "cd frontend-client",
+    "npm run tauri dev",
+    "cd .."
+]
+
+[tasks.flow]
+workspace = false
+dependencies = ["format", "docker_bg", "tauri_install", "tailwind", "tauri_dev", "docker_down"]
