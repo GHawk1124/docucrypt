@@ -119,7 +119,7 @@ async fn login_handler(
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
     let user = match sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash FROM users WHERE username = $1",
+        "SELECT username, password_hash FROM users WHERE username = $1",
     )
     .bind(&payload.username)
     .fetch_one(&pool)
