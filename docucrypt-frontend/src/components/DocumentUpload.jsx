@@ -1,4 +1,7 @@
 import { useState, useRef } from "react";
+import pdfToText from "react-pdftotext";
+import * as XLSX from "xlsx";
+import mammoth from "mammoth";
 import {
   FiUpload,
   FiX,
@@ -50,13 +53,67 @@ const DocumentUpload = () => {
   };
 
   const validateFile = (file) => {
-    if (!file.name.endsWith(".txt")) {
-      return "Only .txt files are allowed";
+    if (!file.name.match(/\.(txt|pdf|xlsx|docx)$/)) {
+      return "Only .txt, .pdf, .xlsx, and .docx files are allowed";
     }
     if (file.size > MAX_FILE_SIZE) {
       return "File size exceeds 5MB limit";
     }
     return null;
+  };
+
+  const stripHtmlTags = (html) => {
+    // Replace specific tags with new lines
+    const formattedHtml = html
+      .replace(/<p>/g, "\n") // Replace <p> with new line
+      .replace(/<\/p>/g, "\n") // Replace </p> with new line
+      .replace(/<div>/g, "\n") // Replace <div> with new line
+      .replace(/<\/div>/g, "\n") // Replace </div> with new line
+      .replace(/<br\s*\/?>/g, "\n"); // Replace <br> with new line
+
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = formattedHtml;
+    return tempDiv.innerText.replace(/\n+/g, "\n").trim(); // Replace multiple new lines with a single one
+  };
+
+  const extractPdfText = async (file) => {
+    try {
+      const text = await pdfToText(file);
+      return text;
+    } catch (error) {
+      console.error("PDF extraction error:", error);
+      throw new Error(`Failed to extract PDF text: ${error.message}`);
+    }
+  };
+
+  const extractExcelText = async (file) => {
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      // Convert the Excel data to a formatted string
+      const text = jsonData
+        .map((row) => row.filter((cell) => cell !== null).join("\t"))
+        .join("\n");
+      return text;
+    } catch (error) {
+      console.error("Excel extraction error:", error);
+      throw new Error(`Failed to extract Excel text: ${error.message}`);
+    }
+  };
+
+  const extractDocxText = async (file) => {
+    try {
+      const result = await mammoth.convertToHtml({
+        arrayBuffer: await file.arrayBuffer(),
+      });
+      const textContent = stripHtmlTags(result.value); // Strip HTML tags and format
+      return textContent; // Return the plain text
+    } catch (error) {
+      console.error("DOCX extraction error:", error);
+      throw new Error(`Failed to extract DOCX text: ${error.message}`);
+    }
   };
 
   const handleFileSelect = async (selectedFiles) => {
@@ -71,14 +128,27 @@ const DocumentUpload = () => {
         newErrors[file.name] = error;
       } else {
         newFiles.push(file);
-        const reader = new FileReader();
-        reader.onload = (e) => {
+        try {
+          let text;
+          if (file.name.endsWith(".pdf")) {
+            text = await extractPdfText(file);
+          } else if (file.name.endsWith(".xlsx")) {
+            text = await extractExcelText(file);
+          } else if (file.name.endsWith(".docx")) {
+            text = await extractDocxText(file);
+          } else {
+            text = await file.text();
+          }
           setPreviews((prev) => ({
             ...prev,
-            [file.name]: e.target.result,
+            [file.name]: text,
           }));
-        };
-        reader.readAsText(file);
+        } catch (error) {
+          setErrors((prev) => ({
+            ...prev,
+            [file.name]: `Failed to read file: ${error.message}`,
+          }));
+        }
       }
     }
 
@@ -183,7 +253,7 @@ const DocumentUpload = () => {
         const reader = new FileReader();
         reader.onload = async (e) => {
           try {
-            await uploadDocument(file.name, e.target.result, token);
+            // await uploadDocument(file.name, e.target.result, token);
             console.log("Successfully uploaded:", file.name);
           } catch (error) {
             console.error("Error uploading file:", file.name, error);
@@ -284,7 +354,7 @@ const DocumentUpload = () => {
                 <FiUpload className="w-12 h-12 text-[var(--color-accent)]" />
                 <div className="text-center">
                   <p className="text-lg font-semibold">
-                    Click to select .txt files
+                    Click to select .txt, .pdf, .xlsx, or .docx files
                   </p>
                   <p className="text-sm text-[var(--color-accent)]">
                     You can select multiple files
@@ -295,7 +365,7 @@ const DocumentUpload = () => {
                   ref={fileInputRef}
                   onChange={(e) => handleFileSelect(e.target.files)}
                   className="hidden"
-                  accept=".txt"
+                  accept=".txt,.pdf,.xlsx,.docx"
                   multiple
                 />
               </div>
