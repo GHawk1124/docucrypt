@@ -5,11 +5,12 @@
   "identifier": "com.docucrypt-frontend.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "trunk build",
+    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "docucrypt",
