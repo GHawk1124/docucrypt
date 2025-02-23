@@ -4,7 +4,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import ChatInterface from "./components/ChatInterface";
 import DocumentUpload from "./components/DocumentUpload";
-import SignInSignUp from "./components/SignInSignUp";
+import SignInSignUp from "./components/SigninSignup";
 import AccountDetails from "./components/AccountDetails";
 import "./assets/styles/App.css";
 

@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "docucrypt-frontend",
-        "width": 800,
-        "height": 600
+        "title": "docucrypt",
+        "width": 1000,
+        "height": 750
       }
     ],
     "security": {

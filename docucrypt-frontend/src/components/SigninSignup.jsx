@@ -24,9 +24,10 @@ const SignInSignUp = () => {
         password: formData.password,
       });
       try {
-        const result = await userLogin(formData.email, formData.password);
-        console.log("Log In Successful:", result);
-        login(result.token, formData.email);
+        // TO DO: commented this out for testing
+        // const result = await userLogin(formData.email, formData.password);
+        // console.log("Log In Successful:", result);
+        // login(result.token, formData.email);
         navigate("/chat-interface");
       } catch (error) {
         setError("Log In Failed: " + error.message);
@@ -76,7 +77,7 @@ const SignInSignUp = () => {
           <div className="relative">
             <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-accent" />
             <input
-              type="email"
+              type="text"
               name="email"
               value={formData.email}
               onChange={handleInputChange}
