@@ -26,5 +26,8 @@ until (timeout 1 bash -c 'cat < /dev/null > /dev/tcp/ollama/11434') &>/dev/null;
     sleep 2
 done
 
+# Set RUST_LOG for tower-http tracing
+export RUST_LOG=tower_http=trace
+
 echo "Starting Axum server..."
 exec encipher-server
