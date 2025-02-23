@@ -3,3 +3,10 @@ actual response"}
 
 - deploy to domain name
 - create download link
+
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "trunk build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
