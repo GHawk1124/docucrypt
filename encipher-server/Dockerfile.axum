@@ -15,4 +15,6 @@ RUN apt-get update && \
     cp target/release/encipher-server /usr/local/bin/
 
 VOLUME /secrets
+RUN chmod +x /usr/local/bin/encipher-server
+RUN chmod +x entrypoint.sh
 ENTRYPOINT ["./entrypoint.sh"]
