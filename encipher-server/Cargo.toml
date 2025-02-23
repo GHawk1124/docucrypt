@@ -14,7 +14,10 @@ serde = "1.0.217"
 tokio = { version = "1.43.0", features = ["full"] }
 tokio-rustls = "0.26.1"
 tokio-stream = { version = "0.1.17", features = ["net"] }
-tower-http = { version = "0.6.2", features = ["cors"] }
+tower-http = { version = "0.6.2", features = ["cors", "trace"] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json", "fmt"]}
+tracing-appender = "0.2"
 futures-util = "0.3"  # For StreamExt
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 argon2 = "0.5.3"
@@ -28,3 +31,4 @@ axum-login = "0.17.0"
 tower-sessions = "0.14.0"
 axum-extra = { version = "0.10.0", features = ["typed-header"] }
 async-trait = "0.1.86"
+

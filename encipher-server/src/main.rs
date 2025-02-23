@@ -21,6 +21,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::time::{timeout, Duration};
 use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
+use tracing::Level;
+use tracing_subscriber::{fmt, EnvFilter};
 
 #[derive(Deserialize)]
 struct RegisterRequest {
@@ -829,6 +832,8 @@ async fn get_user_info_handler(
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt().init();
+
     // Initialize Ollama client pointing to the container.
     let ollama = Ollama::new("http://ollama".to_string(), 11434);
     let shared_state = Arc::new(AppState { ollama });
@@ -869,9 +874,16 @@ async fn main() {
         .route("/login", post(login_handler))
         .layer(Extension(pool))
         .with_state(shared_state)
-        .layer(cors);
+        .layer(cors)
+        .layer(
+            tower_http::trace::TraceLayer::new_for_http()
+                .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(Level::INFO))
+                .on_request(tower_http::trace::DefaultOnRequest::new().level(Level::INFO)),
+        );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    tracing::info!("listening on {}", addr);
+
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .expect("Failed to bind port 3000");
