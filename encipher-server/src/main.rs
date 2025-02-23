@@ -22,6 +22,8 @@ use std::sync::Arc;
 use tokio::time::{timeout, Duration};
 use tower_http::cors::CorsLayer;
 
+mod docugraph;
+
 #[derive(Deserialize)]
 struct RegisterRequest {
     username: String,
@@ -82,7 +84,6 @@ struct User {
 }
 
 // Registration handler
-#[axum::debug_handler]
 async fn register_handler(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<RegisterRequest>,
@@ -113,7 +114,6 @@ async fn register_handler(
 }
 
 // Login handler
-#[axum::debug_handler]
 async fn login_handler(
     Extension(pool): Extension<PgPool>,
     Json(payload): Json<LoginRequest>,
@@ -263,7 +263,6 @@ fn is_valid_clearance(clearance: &str) -> bool {
     matches!(clearance, "UNCLASSIFIED" | "CUI" | "SECRET" | "TOPSECRET")
 }
 
-#[axum::debug_handler]
 async fn update_user_clearance_handler(
     Extension(claims): Extension<Claims>,
     Extension(pool): Extension<PgPool>,
@@ -394,7 +393,6 @@ struct AddUserToGroupRequest {
     group_name: String,
 }
 
-#[axum::debug_handler]
 async fn admin_add_user_to_group_handler(
     Extension(claims): Extension<Claims>,
     Extension(pool): Extension<PgPool>,
@@ -512,7 +510,6 @@ struct JoinGroupRequest {
     password: String,
 }
 
-#[axum::debug_handler]
 async fn user_join_group_handler(
     Extension(claims): Extension<Claims>,
     Extension(pool): Extension<PgPool>,
@@ -597,7 +594,6 @@ struct UpdateAdminRequest {
     group_name: String,
 }
 
-#[axum::debug_handler]
 async fn promote_to_admin_handler(
     Extension(claims): Extension<Claims>,
     Extension(pool): Extension<PgPool>,
@@ -694,7 +690,6 @@ struct CreateGroupRequest {
     tags: Vec<String>,
 }
 
-#[axum::debug_handler]
 async fn create_group_handler(
     Extension(claims): Extension<Claims>,
     Extension(pool): Extension<PgPool>,
@@ -780,7 +775,6 @@ struct UserInfoResponse {
     groups: Vec<GroupInfo>,
 }
 
-#[axum::debug_handler]
 async fn get_user_info_handler(
     Extension(claims): Extension<Claims>,
     Extension(pool): Extension<PgPool>,
