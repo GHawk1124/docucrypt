@@ -824,26 +824,6 @@ async fn get_user_info_handler(
     }))
 }
 
-async fn get_group_tags(
-    Extension(pool): Extension<PgPool>,
-    group_name: &str,
-) -> Result<Vec<String>, (StatusCode, String)> {
-    let tags = sqlx::query("SELECT tags FROM groups WHERE group_name = $1")
-        .bind(group_name)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Database error: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to fetch group tags".to_string(),
-            )
-        })?
-        .get::<Vec<String>, _>("tags");
-
-    Ok(tags)
-}
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().init();
@@ -878,7 +858,6 @@ async fn main() {
         .route("/groups/admins/promote", post(promote_to_admin_handler))
         .route("/groups", post(create_group_handler))
         .route("/users/info", get(get_user_info_handler))
-        .route("/groups/tags", get(get_group_tags))
         .layer(middleware::from_fn(jwt_auth_middleware));
 
     // Build the main router.
