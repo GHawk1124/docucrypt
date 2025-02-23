@@ -9,7 +9,7 @@ hyper = "1.6.0"
 ollama-rs = "0.2.5"
 serde = "1.0.217"
 tokio = { version = "1.43.0", features = ["full"] }
-tower-http = { version = "0.6.2", features = ["cors"] }
+tower-http = { version = "0.6.2", features = ["cors", "trace"] }
 futures-util = "0.3"  # For StreamExt
 argon2 = "0.5.3"
 chrono = "0.4.39"
@@ -23,3 +23,5 @@ uuid = "1.14.0"
 rust-bert = { version = "0.23.0" }
 indradb-lib = { version = "4.0.0", features = ["rocksdb-datastore"] }
 ndarray = "0.16.1"
+tracing-subscriber = { version = "0.3.19", features = ["fmt"] }
+tracing = "0.1.41"

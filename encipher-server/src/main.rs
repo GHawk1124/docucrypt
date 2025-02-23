@@ -23,7 +23,7 @@ use tokio::time::{timeout, Duration};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::Level;
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::fmt;
 
 mod docugraph;
 
