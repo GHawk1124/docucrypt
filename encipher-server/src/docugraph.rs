@@ -322,12 +322,16 @@ use std::thread;
 use tokio::runtime::Builder;
 
 pub async fn run_graph_rag_manager_random_classification() -> Result<()> {
+    tracing::info!("Starting random classification test");
+    
     // Set up classification types.
     let classification_levels = vec![
         "public".to_string(),
         "private".to_string(),
         "internal".to_string(),
     ];
+    tracing::debug!("Classification levels: {:?}", classification_levels);
+    
     let team_name = "RandomTeam".to_string();
     // Candidate tags for each system.
     let tags = vec![
@@ -335,31 +339,31 @@ pub async fn run_graph_rag_manager_random_classification() -> Result<()> {
         "tech".to_string(),
         "history".to_string(),
     ];
+    tracing::debug!("Tags: {:?}", tags);
 
     let mut names = Vec::new();
     let mut document_classifications = Vec::new();
     let mut documents = Vec::new();
 
-    // Make sure to import rand properly if not already:
-    // use rand::seq::SliceRandom;
-    // use rand::rngs::StdRng;  // or another RNG type
-    // use rand::SeedableRng;
     let mut rng = rand::rng();
 
+    tracing::info!("Generating 50 random test documents");
     // Generate 50 documents with random classifications and topics.
     for i in 0..50 {
         names.push(format!("Document {}", i));
         let classification = classification_levels.choose(&mut rng).unwrap().to_string();
-        document_classifications.push(classification);
+        document_classifications.push(classification.clone());
 
         let topic = tags.choose(&mut rng).unwrap().as_str();
         let doc_text = format!(
         "This is document {} discussing {}. It contains insights on {} developments and further observations.",
         i, topic, topic
     );
+        tracing::debug!("Generated document {} with classification {} and topic {}", i, classification, topic);
         documents.push(doc_text);
     }
 
+    tracing::info!("Creating GraphRAGManager");
     // Create the GraphRAGManager.
     let manager = match GraphRAGManager::new(
         classification_levels.clone(),
@@ -371,25 +375,32 @@ pub async fn run_graph_rag_manager_random_classification() -> Result<()> {
     )
     .await
     {
-        Ok(mgr) => mgr,
+        Ok(mgr) => {
+            tracing::info!("Successfully created GraphRAGManager");
+            mgr
+        },
         Err(e) => {
-            eprintln!("Failed to create GraphRAGManager: {:?}", e);
+            tracing::error!("Failed to create GraphRAGManager: {:?}", e);
             return Err(e);
         }
     };
 
     // Issue a query for a particular classification (e.g. "public").
     let query = "What are the latest developments in technology?";
+    tracing::info!("Issuing test query: {}", query);
+    
     match manager.query_by_prompt("public", &tags, query).await {
-        Ok(response) => println!("Query response: {}", response),
-        Err(e) => eprintln!("Query failed: {:?}", e),
+        Ok(response) => {
+            tracing::info!("Query successful");
+            tracing::debug!("Query response: {}", response);
+            println!("Query response: {}", response);
+        },
+        Err(e) => {
+            tracing::error!("Query failed: {:?}", e);
+            eprintln!("Query failed: {:?}", e);
+        }
     }
 
-    // If any resources require explicit async cleanup, call those cleanup methods here.
-    // For example:
-    // for system in manager.systems.values() {
-    //     system.cleanup().await?;
-    // }
-
+    tracing::info!("Random classification test completed successfully");
     Ok(())
 }
