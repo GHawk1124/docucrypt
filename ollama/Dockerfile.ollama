@@ -1,0 +1,11 @@
+FROM ollama/ollama
+
+# Copy custom entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set model name as build argument
+ARG MODEL=deepseek-r1:1.5b
+ENV MODEL=${MODEL}
+
+ENTRYPOINT ["/entrypoint.sh"]

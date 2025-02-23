@@ -1,0 +1,10 @@
+FROM nginx:1.25-alpine
+
+# Copy configuration
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY wait-for-certs.sh /docker-entrypoint.d/40-wait-for-certs.sh
+
+# Ensure script is executable
+RUN chmod +x /docker-entrypoint.d/40-wait-for-certs.sh
+
+ENTRYPOINT ["wait-for-certs.sh"]

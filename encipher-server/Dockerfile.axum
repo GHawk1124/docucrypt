@@ -1,0 +1,18 @@
+FROM rust:latest
+
+WORKDIR /usr/src/app
+COPY . .
+
+RUN wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.4.0%2Bcpu.zip -O libtorch.zip  
+RUN unzip libtorch.zip -d /usr/local/
+ENV LIBTORCH=/usr/local/libtorch  
+ENV LD_LIBRARY_PATH=/usr/local/libtorch/lib:$LD_LIBRARY_PATH   
+
+RUN apt-get update && \
+    apt-get install -y pkg-config libssl-dev clang ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    cargo build --release && \
+    cp target/release/encipher-server /usr/local/bin/
+
+VOLUME /secrets
+ENTRYPOINT ["./entrypoint.sh"]
